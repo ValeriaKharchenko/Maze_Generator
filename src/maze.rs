@@ -1,6 +1,7 @@
 use std::thread::current;
 use r::{Rng, thread_rng};
 use macroquad::prelude::*;
+use crate::map::{Map, WALL};
 
 //each cell has 4 walls. The number is an index in the array of walls
 const TOP: usize = 0;
@@ -45,11 +46,10 @@ impl Cell {
             next.walls[LEFT] = false;
             return 1;
         }
-        if y == 1 && self.walls[TOP]  {
+        if y == 1 && self.walls[TOP] {
             self.walls[TOP] = false;
             next.walls[BOTTOM] = false;
             return 1;
-
         }
         if y == -1 && self.walls[BOTTOM] {
             self.walls[BOTTOM] = false;
@@ -73,14 +73,14 @@ pub struct Grid {
 
 impl Grid {
     pub fn new(width: i32, height: i32, difficulty: i32) -> Grid {
-       let mut grid = Grid {
-           width,
-           height,
-           cells: Vec::new(),
-           backtrace: Vec::new(),
-           current: 0,
-           difficulty,
-           walls: 0,
+        let mut grid = Grid {
+            width,
+            height,
+            cells: Vec::new(),
+            backtrace: Vec::new(),
+            current: 0,
+            difficulty,
+            walls: 0,
         };
         for i in 0..height {
             for j in 0..width {
@@ -102,8 +102,8 @@ impl Grid {
         let mut neighbours = Vec::new();
         let current_row = self.cells[self.current].row;
         let current_col = self.cells[self.current].col;
-        let neighbor_indices : [i32; 4] = [
-            self.calculate_index(current_row -1, current_col),
+        let neighbor_indices: [i32; 4] = [
+            self.calculate_index(current_row - 1, current_col),
             self.calculate_index(current_row, current_col + 1),
             self.calculate_index(current_row + 1, current_col),
             self.calculate_index(current_row, current_col - 1),
@@ -123,7 +123,7 @@ impl Grid {
                 Some(neighbours[0])
             } else {
                 Some(neighbours[(thread_rng().gen_range(0..neighbours.len())) as usize])
-            }
+            };
         }
         return None;
     }
@@ -152,13 +152,14 @@ impl Grid {
                         self.backtrace.remove(0);
                     } else {
                         self.adjust_difficulty_level();
-                        break
+                        break;
                     }
                 }
             }
         }
     }
     fn adjust_difficulty_level(&mut self) {
+        //count number of walls that has to be deleted
         let mut has_to_remove = self.walls * self.difficulty / 100;
 
         while has_to_remove != 0 {
@@ -171,31 +172,61 @@ impl Grid {
                     self.cells.split_at_mut(std::cmp::max(self.current, next));
                 let cell1 = &mut lower_part[std::cmp::min(self.current, next)];
                 let cell2 = &mut higher_part[0];
-               if cell1.remove_wall(cell2) == 1 {
+                if cell1.remove_wall(cell2) == 1 {
                     self.walls = self.walls - 1;
-                   has_to_remove = has_to_remove - 1;
-               }
+                    has_to_remove = has_to_remove - 1;
+                }
             }
         }
     }
+    //converts array of cells to matrix
+    pub fn convert_to_map(&self) -> Map {
+        let mut map = Map::new((self.width * 2 + 1) as usize, (self.height * 2 + 1) as usize);
+        for i in 0..self.cells.len() {
+            let cell = self.cells[i].walls;
+            let row = self.cells[i].row as usize;
+            let col = self.cells[i].col as usize;
+            if cell[TOP] {
+                map.0[row * 2][col * 2] = WALL;
+                map.0[row * 2][col * 2 + 1] = WALL;
+                map.0[row * 2][col * 2 + 2] = WALL;
+            }
+            if cell[RIGHT] {
+                map.0[row * 2][col * 2 + 2] = WALL;
+                map.0[row * 2+ 1][col * 2 + 2] = WALL;
+                map.0[row * 2 + 2][col * 2 + 2] = WALL;
+            }
+            if cell[BOTTOM] {
+                map.0[row * 2 + 2][col * 2] = WALL;
+                map.0[row * 2 + 2][col * 2 + 1] = WALL;
+                map.0[row * 2 + 2][col * 2 + 2] = WALL;
+            }
+            if cell[LEFT] {
+                map.0[row * 2][col * 2] = WALL;
+                map.0[row * 2+ 1][col * 2] = WALL;
+                map.0[row * 2 + 2][col * 2] = WALL;
+            }
+        };
+        return map;
+    }
 
-    pub fn draw_maze(&self) {
+    pub fn draw(&self) {
         let size: f32 = 10.0;
         let offset: f32 = 100.0;
         for ind in 0..self.cells.len() {
             let row = self.cells[ind].row as f32;
             let col = self.cells[ind].col as f32;
             if self.cells[ind].walls[TOP] {
-                draw_line(col * size + offset, row * size + offset, (col+ 1.0)*size + offset, row * size + offset, 5.0, WHITE);
+                draw_line(col * size + offset, row * size + offset, (col + 1.0) * size + offset, row * size + offset, 1.0, WHITE);
             }
             if self.cells[ind].walls[RIGHT] {
-                draw_line((col+ 1.0)*size + offset, row * size + offset, (col+ 1.0)*size + offset, (row + 1.0) * size + offset, 5.0, WHITE);
+                draw_line((col + 1.0) * size + offset, row * size + offset, (col + 1.0) * size + offset, (row + 1.0) * size + offset, 1.0, WHITE);
             }
             if self.cells[ind].walls[BOTTOM] {
-                draw_line(col * size + offset, (row + 1.0) * size + offset, (col+ 1.0)*size + offset, (row + 1.0) * size + offset, 5.0, WHITE);
+                draw_line(col * size + offset, (row + 1.0) * size + offset, (col + 1.0) * size + offset, (row + 1.0) * size + offset, 1.0, WHITE);
             }
             if self.cells[ind].walls[LEFT] {
-                draw_line(col * size + offset, row * size + offset,col * size + offset, (row + 1.0) * size + offset, 5.0, WHITE);
+                draw_line(col * size + offset, row * size + offset, col * size + offset, (row + 1.0) * size + offset, 1.0, WHITE);
             }
         }
     }
